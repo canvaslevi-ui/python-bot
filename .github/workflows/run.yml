@@ -10,11 +10,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout Repository
         uses: actions/checkout@v3
 
       - name: Install PHP
-        run: sudo apt update && sudo apt install php -y
+        run: |
+          sudo apt update
+          sudo apt install php -y
 
       - name: Run Script
         run: php bot.php
