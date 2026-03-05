@@ -1,0 +1,20 @@
+name: PHP Bot
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/10 * * * *"
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Install PHP
+        run: sudo apt update && sudo apt install php -y
+
+      - name: Run Script
+        run: php bot.php
