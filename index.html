@@ -47,7 +47,6 @@ select option{background:#1e293b;}
 
 .panel-header{display:flex;justify-content:space-between;align-items:center;}
 
-/* ===== FIX: BRIGHTER PANEL ID ===== */
 .panel-id{
   font-weight:bold;
   font-size:20px;
@@ -56,7 +55,6 @@ select option{background:#1e293b;}
   letter-spacing:0.5px;
 }
 
-/* ===== FIX: PANEL NUMBER BADGE - BRIGHTER ===== */
 .panel-number{
   display:inline-block;
   background:linear-gradient(135deg, #3b82f6, #8b5cf6);
@@ -70,7 +68,6 @@ select option{background:#1e293b;}
   text-shadow: 0 0 10px rgba(255,255,255,0.3);
 }
 
-/* ===== FIX: PANEL STATUS - BRIGHTER ===== */
 .panel-status{
   font-size:12px;
   padding:4px 14px;
@@ -167,6 +164,30 @@ select option{background:#1e293b;}
 .project-info-item .value.yellow{color:#f59e0b;}
 .project-info-item .value.blue{color:#3b82f6;}
 .project-info-item .value.purple{color:#8b5cf6;}
+
+/* Toast notification */
+#custom-toast {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  padding: 14px 20px;
+  border-radius: 10px;
+  opacity: 0;
+  transform: translateY(-20px);
+  transition: 0.3s;
+  z-index: 999;
+  max-width: 90%;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  font-family: system-ui;
+  font-size: 14px;
+}
+#custom-toast.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+#custom-toast.success { background: #065f46; color: #a7f3d0; }
+#custom-toast.error { background: #7f1d1d; color: #fca5a5; }
+#custom-toast.info { background: #1e3a5f; color: #93c5fd; }
 
 @media (max-width:600px){
   .panel-details{grid-template-columns:1fr 1fr;}
@@ -577,9 +598,33 @@ async function updateStatus(panelId, status) {
 }
 
 // ==========================================
-// SEND STICKER - FIXED VERSION
+// TOAST NOTIFICATION
 // ==========================================
-function sendSticker(panelId) {
+function showToast(msg, type = "success") {
+  // Remove existing toast if any
+  const existing = document.getElementById('custom-toast');
+  if (existing) existing.remove();
+  
+  const toast = document.createElement('div');
+  toast.id = 'custom-toast';
+  toast.className = type;
+  toast.textContent = msg;
+  document.body.appendChild(toast);
+  
+  // Trigger show
+  setTimeout(() => toast.classList.add('show'), 10);
+  
+  // Auto hide after 4 seconds
+  setTimeout(() => {
+    toast.classList.remove('show');
+    setTimeout(() => toast.remove(), 500);
+  }, 4000);
+}
+
+// ==========================================
+// SEND STICKER - WITH SHARE FUNCTIONALITY
+// ==========================================
+async function sendSticker(panelId) {
   const projectId = document.getElementById('projectSelect').value;
   if (!projectId) {
     alert('Please select a project first');
@@ -604,40 +649,101 @@ function sendSticker(panelId) {
     return;
   }
 
-  // Confirm before sending
-  const confirmMsg = `📤 Send sticker for Panel ${panelId} to production?\nSticker Page: ${panel.stickerPage || 'N/A'}`;
-  if (!confirm(confirmMsg)) {
-    return;
+  const cleanId = panelId.replace('#', '').trim();
+  const stickerUrl = API + '/api/projects/' + projectId + '/sticker/' + encodeURIComponent(cleanId);
+  
+  // Prepare the data to share
+  const shareData = {
+    title: `Sticker for Panel ${panelId}`,
+    text: `📋 Panel: ${panelId}\n📄 Page: ${panel.stickerPage || 'N/A'}\n📁 Project: ${project.name}\n🔗 ${stickerUrl}`,
+    url: stickerUrl
+  };
+
+  try {
+    // Try using Web Share API first (mobile/desktop)
+    if (navigator.share) {
+      await navigator.share(shareData);
+      
+      // Show success message
+      showToast(`✅ Sticker for Panel ${panelId} shared successfully!`, 'success');
+      
+      // Update status if pending
+      if (panel.status === 'pending') {
+        await updateStatus(panelId, 'cutting');
+      }
+      
+      // Play sound
+      clickSound.play();
+      if (navigator.vibrate) navigator.vibrate(100);
+      
+      // Refresh after a moment
+      setTimeout(() => loadProjects(), 1500);
+    } 
+    // Fallback: Copy link to clipboard
+    else if (navigator.clipboard) {
+      await navigator.clipboard.writeText(`Panel: ${panelId}\nSticker Page: ${panel.stickerPage || 'N/A'}\nProject: ${project.name}\nLink: ${stickerUrl}`);
+      
+      showToast(`📋 Sticker link for Panel ${panelId} copied to clipboard!`, 'success');
+      
+      // Update status if pending
+      if (panel.status === 'pending') {
+        await updateStatus(panelId, 'cutting');
+      }
+      
+      clickSound.play();
+      if (navigator.vibrate) navigator.vibrate(100);
+      setTimeout(() => loadProjects(), 1500);
+    } 
+    // Final fallback: Open in new window
+    else {
+      const confirmMsg = `📤 Open sticker for Panel ${panelId}?\nSticker Page: ${panel.stickerPage || 'N/A'}\n\n(This will open the sticker in a new window)`;
+      if (confirm(confirmMsg)) {
+        window.open(stickerUrl, '_blank');
+        
+        // Update status if pending
+        if (panel.status === 'pending') {
+          await updateStatus(panelId, 'cutting');
+        }
+        
+        showToast(`📤 Sticker for Panel ${panelId} opened`, 'success');
+        setTimeout(() => loadProjects(), 1500);
+      }
+    }
+  } catch (err) {
+    // User cancelled share dialog
+    if (err.name === 'AbortError' || err.message?.includes('cancel')) {
+      console.log('Share cancelled by user');
+      return;
+    }
+    
+    console.error('❌ Share error:', err);
+    
+    // Fallback to clipboard if share fails
+    try {
+      if (navigator.clipboard) {
+        await navigator.clipboard.writeText(`Panel: ${panelId}\nSticker Page: ${panel.stickerPage || 'N/A'}\nProject: ${project.name}\nLink: ${stickerUrl}`);
+        showToast(`📋 Sticker link copied to clipboard!`, 'success');
+        
+        if (panel.status === 'pending') {
+          await updateStatus(panelId, 'cutting');
+        }
+        
+        clickSound.play();
+        if (navigator.vibrate) navigator.vibrate(100);
+        setTimeout(() => loadProjects(), 1500);
+      } else {
+        // Final fallback: open in new window        window.open(stickerUrl, '_blank');
+        if (panel.status === 'pending') {
+          await updateStatus(panelId, 'cutting');
+        }
+        showToast(`📤 Sticker opened for Panel ${panelId}`, 'success');
+        setTimeout(() => loadProjects(), 1500);
+      }
+    } catch (clipboardErr) {
+      showToast(`❌ Could not share: ${err.message}`, 'error');
+      console.error('Clipboard error:', clipboardErr);
+    }
   }
-
-  // First, update status to "cutting" if it's pending
-  if (panel.status === 'pending') {
-    updateStatus(panelId, 'cutting');
-  }
-
-  // Open the sticker for printing (so the staff can see and print it)
-  printSingleSticker(panelId);
-
-  // Show success message
-  const msg = document.getElementById('statusMsg');
-  msg.innerText = `✅ Sticker for Panel ${panelId} sent to production!`;
-  msg.className = 'success-msg show';
-  msg.style.background = '#065f46';
-  msg.style.color = '#a7f3d0';
-
-  // Play success sound
-  clickSound.play();
-  if (navigator.vibrate) navigator.vibrate(100);
-
-  // Refresh after a moment
-  setTimeout(() => {
-    loadProjects();
-    setTimeout(() => {
-      msg.className = 'success-msg';
-      msg.style.background = '';
-      msg.style.color = '';
-    }, 5000);
-  }, 1500);
 }
 
 // ==========================================
