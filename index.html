@@ -111,6 +111,7 @@ select option{background:#1e293b;}
 .panel-actions .dis{background:linear-gradient(135deg, #10b981, #059669);color:#fff;box-shadow:0 2px 8px rgba(16,185,129,0.3);}
 .panel-actions .print-btn{background:linear-gradient(135deg, #8b5cf6, #7c3aed);color:#fff;box-shadow:0 2px 8px rgba(139,92,246,0.3);}
 .panel-actions .send-btn{background:linear-gradient(135deg, #f59e0b, #d97706);color:#000;box-shadow:0 2px 8px rgba(245,158,11,0.3);}
+.panel-actions .send-btn:disabled{opacity:0.5;cursor:not-allowed;}
 
 .progress{height:8px;background:#1e293b;border-radius:10px;overflow:hidden;margin-top:6px;}
 .progress-bar{height:100%;background:#22c55e;transition:width 0.5s;}
@@ -576,16 +577,16 @@ async function updateStatus(panelId, status) {
 }
 
 // ==========================================
-// SEND STICKER - NEW FUNCTION
+// SEND STICKER - FIXED VERSION
 // ==========================================
-async function sendSticker(panelId) {
+function sendSticker(panelId) {
   const projectId = document.getElementById('projectSelect').value;
   if (!projectId) {
     alert('Please select a project first');
     return;
   }
 
-  // Find the panel in the current project to verify it exists
+  // Find the panel in the current project
   const project = projects.find(p => p._id === projectId);
   if (!project) {
     alert('Project not found');
@@ -604,117 +605,39 @@ async function sendSticker(panelId) {
   }
 
   // Confirm before sending
-  const confirmMsg = `📤 Send sticker for Panel ${panelId}?\nSticker Page: ${panel.stickerPage || 'N/A'}`;
+  const confirmMsg = `📤 Send sticker for Panel ${panelId} to production?\nSticker Page: ${panel.stickerPage || 'N/A'}`;
   if (!confirm(confirmMsg)) {
     return;
   }
 
-  try {
-    // Show loading state on the button
-    const buttons = document.querySelectorAll('.send-btn');
-    let targetBtn = null;
-    buttons.forEach(btn => {
-      if (btn.textContent.trim() === '📤 Send') {
-        targetBtn = btn;
-      }
-    });
-    
-    if (targetBtn) {
-      targetBtn.textContent = '⏳ Sending...';
-      targetBtn.disabled = true;
-    }
+  // First, update status to "cutting" if it's pending
+  if (panel.status === 'pending') {
+    updateStatus(panelId, 'cutting');
+  }
 
-    // Call the send sticker API
-    const cleanId = panelId.replace('#', '').trim();
-    const response = await fetch(API + '/api/projects/' + projectId + '/send-sticker/' + encodeURIComponent(cleanId), {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    });
+  // Open the sticker for printing (so the staff can see and print it)
+  printSingleSticker(panelId);
 
-    const data = await response.json();
+  // Show success message
+  const msg = document.getElementById('statusMsg');
+  msg.innerText = `✅ Sticker for Panel ${panelId} sent to production!`;
+  msg.className = 'success-msg show';
+  msg.style.background = '#065f46';
+  msg.style.color = '#a7f3d0';
 
-    if (data.success) {
-      showToast(`✅ Sticker sent for Panel ${panelId}`, 'success');
-      
-      // Play success sound
-      clickSound.play();
-      if (navigator.vibrate) navigator.vibrate(100);
-      
-      // Update the status message
-      const msg = document.getElementById('statusMsg');
-      msg.innerText = `✅ Sticker for Panel ${panelId} sent successfully!`;
-      msg.className = 'success-msg show';
-      
-      // Refresh the project list to update status
-      setTimeout(() => loadProjects(), 1000);
-    } else {
-      throw new Error(data.message || 'Failed to send sticker');
-    }
-  } catch (err) {
-    console.error('❌ Send sticker error:', err);
-    showToast(`❌ Error sending sticker: ${err.message}`, 'error');
-    
-    const msg = document.getElementById('statusMsg');
-    msg.innerText = `❌ Failed to send sticker: ${err.message}`;
-    msg.className = 'success-msg show';
-    msg.style.background = '#7f1d1d';
-    msg.style.color = '#fca5a5';
-    
+  // Play success sound
+  clickSound.play();
+  if (navigator.vibrate) navigator.vibrate(100);
+
+  // Refresh after a moment
+  setTimeout(() => {
+    loadProjects();
     setTimeout(() => {
       msg.className = 'success-msg';
       msg.style.background = '';
       msg.style.color = '';
     }, 5000);
-  } finally {
-    // Reset button state
-    const buttons = document.querySelectorAll('.send-btn');
-    buttons.forEach(btn => {
-      btn.textContent = '📤 Send';
-      btn.disabled = false;
-    });
-  }
-}
-
-// ==========================================
-// TOAST NOTIFICATION
-// ==========================================
-function showToast(msg, type = "success") {
-  // Create toast element if it doesn't exist
-  let toast = document.getElementById('custom-toast');
-  if (!toast) {
-    toast = document.createElement('div');
-    toast.id = 'custom-toast';
-    toast.style.cssText = `
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      background: #065f46;
-      color: #fff;
-      padding: 14px 20px;
-      border-radius: 10px;
-      opacity: 0;
-      transform: translateY(-20px);
-      transition: 0.3s;
-      z-index: 999;
-      max-width: 90%;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-      font-family: system-ui;
-    `;
-    document.body.appendChild(toast);
-  }
-  
-  toast.innerText = msg;
-  toast.style.background = type === 'error' ? '#ef4444' : '#065f46';
-  toast.style.opacity = '1';
-  toast.style.transform = 'translateY(0)';
-  
-  clearTimeout(toast._timeout);
-  toast._timeout = setTimeout(() => {
-    toast.style.opacity = '0';
-    toast.style.transform = 'translateY(-20px)';
-  }, 4000);
+  }, 1500);
 }
 
 // ==========================================
@@ -752,14 +675,6 @@ function printSingleSticker(panelId) {
   console.log('   📄 Sticker Page:', panel.stickerPage);
   console.log('   📁 File:', panel.stickerFileName);
   console.log('   🔗 URL:', url);
-  
-  // Show a confirmation to the user
-  if (panel.stickerPage) {
-    const confirmMsg = `Printing sticker for Panel ${panelId}\nSticker Page: ${panel.stickerPage}\nContinue?`;
-    if (!confirm(confirmMsg)) {
-      return;
-    }
-  }
   
   const win = window.open(url, '_blank');
   if (!win) {
