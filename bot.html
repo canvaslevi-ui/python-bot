@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Levi Interiors Staff</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{margin:0;font-family:system-ui;background:#0f172a;color:#fff;}
+
+.header{
+  position:sticky;top:0;background:#020617;padding:14px 20px;
+  display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;
+  z-index:10;
+}
+.header-title{font-size:18px;font-weight:bold;display:flex;align-items:center;gap:10px;}
+.header-title span{font-size:14px;font-weight:normal;color:#94a3b8;}
+.header-actions{display:flex;gap:8px;flex-wrap:wrap;}
+.header-actions button{padding:8px 16px;border:none;border-radius:8px;font-weight:bold;cursor:pointer;font-size:13px;}
+.print-all-btn{background:#8b5cf6;color:#fff;}
+.refresh-btn{background:#3b82f6;color:#fff;}
+.admin-btn{background:#f59e0b;color:#000;}
+
+.container{padding:12px;max-width:1200px;margin:0 auto;}
+
+.card{background:#1e293b;padding:12px;border-radius:10px;margin-bottom:10px;}
+
+input,select{width:100%;padding:12px;border:none;border-radius:8px;margin-top:6px;font-size:16px;background:#0f172a;color:#fff;}
+select option{background:#1e293b;}
+
+.dashboard{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
+.box{padding:12px;border-radius:10px;text-align:center;}
+.box span{font-size:22px;font-weight:bold;display:block;}
+.pending{background:#f59e0b;color:#000;}
+.cutting{background:#3b82f6;color:#fff;}
+.dispatch{background:#10b981;color:#fff;}
+
+.panel{
+  background:#111827;padding:12px;border-radius:10px;margin-bottom:10px;border-left:6px solid #f59e0b;transition:0.2s;
+}
+.panel:hover{transform:translateX(4px);}
+.panel.pending{border-color:#f59e0b;}
+.panel.cutting{border-color:#3b82f6;}
+.panel.dispatched{border-color:#10b981;opacity:0.7;}
+
+.panel-header{display:flex;justify-content:space-between;align-items:center;}
+
+/* ===== FIX: BRIGHTER PANEL ID ===== */
+.panel-id{
+  font-weight:bold;
+  font-size:20px;
+  color:#ffffff;
+  text-shadow: 0 0 20px rgba(59,130,246,0.3), 0 0 40px rgba(59,130,246,0.1);
+  letter-spacing:0.5px;
+}
+
+/* ===== FIX: PANEL NUMBER BADGE - BRIGHTER ===== */
+.panel-number{
+  display:inline-block;
+  background:linear-gradient(135deg, #3b82f6, #8b5cf6);
+  padding:2px 12px;
+  border-radius:12px;
+  font-size:13px;
+  font-weight:bold;
+  color:#ffffff;
+  margin-left:8px;
+  box-shadow: 0 0 20px rgba(59,130,246,0.4);
+  text-shadow: 0 0 10px rgba(255,255,255,0.3);
+}
+
+/* ===== FIX: PANEL STATUS - BRIGHTER ===== */
+.panel-status{
+  font-size:12px;
+  padding:4px 14px;
+  border-radius:12px;
+  font-weight:bold;
+  letter-spacing:0.5px;
+}
+.panel-status.pending{
+  background:linear-gradient(135deg, #f59e0b, #d97706);
+  color:#000;
+  box-shadow: 0 0 20px rgba(245,158,11,0.4);
+}
+.panel-status.cutting{
+  background:linear-gradient(135deg, #3b82f6, #2563eb);
+  color:#fff;
+  box-shadow: 0 0 20px rgba(59,130,246,0.4);
+}
+.panel-status.dispatched{
+  background:linear-gradient(135deg, #10b981, #059669);
+  color:#fff;
+  box-shadow: 0 0 20px rgba(16,185,129,0.4);
+}
+
+.panel-details{
+  display:grid;
+  grid-template-columns:1fr 1fr 1fr;
+  gap:8px;
+  margin-top:6px;
+  font-size:13px;
+  color:#94a3b8;
+}
+.panel-details strong{color:#e2e8f0;}
+
+.panel-actions{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;}
+.panel-actions button{flex:1;padding:10px;border:none;border-radius:8px;font-size:13px;font-weight:bold;cursor:pointer;transition:0.2s;min-width:80px;}
+.panel-actions button:hover{opacity:0.85;transform:scale(0.97);}
+.panel-actions .cut{background:linear-gradient(135deg, #3b82f6, #2563eb);color:#fff;box-shadow:0 2px 8px rgba(59,130,246,0.3);}
+.panel-actions .dis{background:linear-gradient(135deg, #10b981, #059669);color:#fff;box-shadow:0 2px 8px rgba(16,185,129,0.3);}
+.panel-actions .print-btn{background:linear-gradient(135deg, #8b5cf6, #7c3aed);color:#fff;box-shadow:0 2px 8px rgba(139,92,246,0.3);}
+.panel-actions .send-btn{background:linear-gradient(135deg, #f59e0b, #d97706);color:#000;box-shadow:0 2px 8px rgba(245,158,11,0.3);}
+.panel-actions .send-btn:disabled{opacity:0.5;cursor:not-allowed;}
+
+.progress{height:8px;background:#1e293b;border-radius:10px;overflow:hidden;margin-top:6px;}
+.progress-bar{height:100%;background:#22c55e;transition:width 0.5s;}
+
+.filters{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.price-tag{font-size:12px;color:#22c55e;font-weight:bold;}
+
+.loading{text-align:center;padding:30px;color:#94a3b8;}
+.loading .spinner{display:inline-block;width:30px;height:30px;border:3px solid #1e293b;border-top-color:#3b82f6;border-radius:50%;animation:spin 0.8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+.error-box{background:#7f1d1d;padding:20px;border-radius:10px;text-align:center;border:1px solid #ef4444;}
+.error-box h3{color:#fca5a5;margin-bottom:8px;}
+.error-box p{color:#fecaca;font-size:14px;}
+
+.success-msg{background:#065f46;padding:8px 16px;border-radius:6px;color:#a7f3d0;font-size:13px;margin-top:6px;display:none;}
+.success-msg.show{display:block;}
+
+.server-status{padding:4px 10px;border-radius:4px;font-size:11px;display:inline-block;margin-left:8px;}
+.server-status.online{background:#065f46;color:#a7f3d0;}
+.server-status.offline{background:#7f1d1d;color:#fca5a5;}
+.server-status.checking{background:#1e3a5f;color:#93c5fd;}
+
+.empty-state{text-align:center;padding:40px 20px;color:#94a3b8;}
+.empty-state .icon{font-size:48px;margin-bottom:12px;}
+.empty-state h3{color:#fff;margin-bottom:4px;}
+.empty-state p{font-size:14px;}
+
+.project-info-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr 1fr 1fr;
+  gap:12px;
+  margin-top:8px;
+}
+.project-info-item{
+  background:#0f172a;
+  padding:10px 14px;
+  border-radius:8px;
+  text-align:center;
+}
+.project-info-item .label{
+  font-size:11px;
+  color:#94a3b8;
+  display:block;
+  margin-bottom:2px;
+}
+.project-info-item .value{
+  font-size:20px;
+  font-weight:bold;
+  color:#fff;
+}
+.project-info-item .value.green{color:#10b981;}
+.project-info-item .value.yellow{color:#f59e0b;}
+.project-info-item .value.blue{color:#3b82f6;}
+.project-info-item .value.purple{color:#8b5cf6;}
+
+@media (max-width:600px){
+  .panel-details{grid-template-columns:1fr 1fr;}
+  .filters{grid-template-columns:1fr;}
+  .header{flex-direction:column;}
+  .header-actions{width:100%;}
+  .header-actions button{flex:1;}
+  .panel-id{font-size:17px;}
+  .project-info-grid{grid-template-columns:1fr 1fr;gap:6px;}
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-title">
+    👷 Levi Interiors - Staff Panel
+  </div>
+  <div class="header-actions">
+    <!-- All buttons removed -->
+  </div>
+</div>
+
+<div class="container">
+
+<!-- Server Status -->
+<div class="card">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+    <span>📡 Server: <span id="serverStatus" class="server-status checking">Checking...</span></span>
+  </div>
+</div>
+
+<!-- Project Selector -->
+<div class="card">
+<select id="projectSelect" onchange="loadProject()">
+  <option value="">Loading projects...</option>
+</select>
+</div>
+
+<!-- Project Info -->
+<div class="card">
+  <div id="projectInfoContainer">
+    <h2 id="pName" style="font-size:22px;color:#fff;margin:0;">-</h2>
+    <div class="project-info-grid">
+      <div class="project-info-item">
+        <span class="label">📦 Total Panels</span>
+        <span class="value blue" id="pCount">0</span>
+      </div>
+      <div class="project-info-item">
+        <span class="label">🏷️ Stickers</span>
+        <span class="value green" id="pStickers">0</span>
+      </div>
+      <div class="project-info-item">
+        <span class="label">📊 Status</span>
+        <span class="value yellow" id="pStatus">-</span>
+      </div>
+      <div class="project-info-item">
+        <span class="label">✅ Matched</span>
+        <span class="value purple" id="pMatched">0</span>
+      </div>
+    </div>
+  </div>
+  <div id="statusMsg" class="success-msg"></div>
+</div>
+
+<!-- Dashboard -->
+<div class="dashboard">
+  <div class="box pending">⏳ Pending<br><span id="pending">0</span></div>
+  <div class="box cutting">✂️ Cutting<br><span id="cutting">0</span></div>
+  <div class="box dispatch">🚚 Dispatch<br><span id="dispatch">0</span></div>
+</div>
+
+<!-- Progress -->
+<div class="card">
+  Progress
+  <div class="progress"><div id="bar" class="progress-bar" style="width:0%;"></div></div>
+  <div id="progressText" style="font-size:13px;color:#94a3b8;margin-top:4px;">0% Done</div>
+</div>
+
+<!-- Filters -->
+<div class="filters">
+  <input id="search" placeholder="🔍 Search Panel ID" oninput="loadProject()">
+  <select id="filter" onchange="loadProject()">
+    <option value="all">All Status</option>
+    <option value="pending">⏳ Pending</option>
+    <option value="cutting">✂️ Cutting</option>
+    <option value="dispatched">🚚 Dispatched</option>
+  </select>
+</div>
+
+<!-- Panel List -->
+<div id="list">
+  <div class="loading">
+    <div class="spinner"></div>
+    <p style="margin-top:12px;">Loading panels...</p>
+  </div>
+</div>
+
+</div>
+
+<script>
+
+// ==========================================
+// CONFIGURATION
+// ==========================================
+const API = "https://levi-api-zhbu.onrender.com";
+
+console.log('📡 Staff Panel API URL:', API);
+
+// ==========================================
+// SOCKET CONNECTION
+// ==========================================
+let socket;
+try {
+  socket = io(API, {
+    timeout: 5000,
+    reconnection: true,
+    reconnectionAttempts: 3
+  });
+  socket.on('connect', () => console.log('✅ Socket connected'));
+  socket.on('connect_error', (err) => console.log('❌ Socket error:', err.message));
+  socket.on('refresh', () => {
+    console.log('🔄 Refresh received from server');
+    loadProjects();
+  });
+} catch (err) {
+  console.log('❌ Socket init error:', err.message);
+}
+
+// ==========================================
+// SOUND EFFECT
+// ==========================================
+const clickSound = new Audio("https://www.soundjay.com/buttons/sounds/button-3.mp3");
+
+let projects = [];
+let loading = false;
+
+// ==========================================
+// CHECK SERVER STATUS
+// ==========================================
+async function checkServerStatus() {
+  const statusEl = document.getElementById('serverStatus');
+  statusEl.className = 'server-status checking';
+  statusEl.textContent = 'Checking...';
+  
+  try {
+    const res = await fetch(API + '/api/projects', {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' },
+      signal: AbortSignal.timeout(5000)
+    });
+    
+    if (res.ok) {
+      statusEl.className = 'server-status online';
+      statusEl.textContent = '✅ Online';
+    } else {
+      statusEl.className = 'server-status offline';
+      statusEl.textContent = '⚠️ Error ' + res.status;
+    }
+  } catch (err) {
+    statusEl.className = 'server-status offline';
+    statusEl.textContent = '❌ Offline';
+    console.error('Server check failed:', err);
+  }
+}
+
+// ==========================================
+// HELPER: NORMALIZE ID
+// ==========================================
+function normalizeId(id) {
+  return String(id).replace('#', '').trim();
+}
+
+// ==========================================
+// LOAD PROJECTS
+// ==========================================
+async function loadProjects() {
+  if (loading) return;
+  loading = true;
+
+  try {
+    console.log('📡 Fetching projects from:', API + '/api/projects');
+    
+    const res = await fetch(API + '/api/projects', {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' },
+      signal: AbortSignal.timeout(10000)
+    });
+
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+    }
+
+    const data = await res.json();
+
+    if (!data.success) {
+      throw new Error(data.message || 'API returned error');
+    }
+
+    projects = data.data || [];
+    console.log(`✅ Loaded ${projects.length} projects`);
+
+    const select = document.getElementById('projectSelect');
+    const currentVal = select.value;
+    select.innerHTML = '';
+
+    if (projects.length === 0) {
+      select.innerHTML = '<option value="">No projects found</option>';
+      document.getElementById('list').innerHTML = `
+        <div class="empty-state">
+          <div class="icon">📭</div>
+          <h3>No Projects</h3>
+          <p>Upload a project from the Admin panel first</p>
+        </div>
+      `;
+    } else {
+      projects.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p._id;
+        opt.textContent = p.name;
+        select.appendChild(opt);
+      });
+      // If URL has ?id= parameter, select that project
+      const urlParams = new URLSearchParams(window.location.search);
+      const idParam = urlParams.get('id');
+      if (idParam && projects.find(p => p._id === idParam)) {
+        select.value = idParam;
+      } else {
+        select.value = currentVal || projects[0]?._id || '';
+      }
+    }
+
+    loadProject();
+
+    // Update server status
+    document.getElementById('serverStatus').className = 'server-status online';
+    document.getElementById('serverStatus').textContent = '✅ Online';
+
+  } catch (err) {
+    console.error('❌ Load error:', err);
+    document.getElementById('serverStatus').className = 'server-status offline';
+    document.getElementById('serverStatus').textContent = '❌ Offline';
+    
+    document.getElementById('list').innerHTML = `
+      <div class="error-box">
+        <h3>⚠️ Connection Error</h3>
+        <p>${err.message}</p>
+        <p style="margin-top:8px;font-size:12px;">API: ${API}</p>
+        <button onclick="loadProjects()" style="margin-top:12px;padding:8px 20px;background:#3b82f6;border:none;border-radius:6px;color:#fff;cursor:pointer;width:auto;">Retry</button>
+      </div>
+    `;
+    document.getElementById('projectSelect').innerHTML = '<option value="">Error loading projects</option>';
+  }
+
+  loading = false;
+}
+
+// ==========================================
+// LOAD CURRENT PROJECT
+// ==========================================
+function loadProject() {
+  const id = document.getElementById('projectSelect').value;
+  const search = document.getElementById('search').value.toLowerCase();
+  const filter = document.getElementById('filter').value;
+
+  const project = projects.find(p => p._id === id);
+  if (!project) {
+    document.getElementById('list').innerHTML = '<div style="text-align:center;padding:20px;color:#94a3b8;">Select a project</div>';
+    document.getElementById('pName').innerText = '-';
+    document.getElementById('pCount').innerText = '0';
+    document.getElementById('pStickers').innerText = '0';
+    document.getElementById('pStatus').innerText = '-';
+    document.getElementById('pMatched').innerText = '0';
+    return;
+  }
+
+  // Sort panels by ID number (ascending)
+  const sortedPanels = [...project.panels].sort((a, b) => {
+    const numA = parseInt(String(a.id).replace(/[^0-9]/g, '')) || 0;
+    const numB = parseInt(String(b.id).replace(/[^0-9]/g, '')) || 0;
+    return numA - numB;
+  });
+
+  let html = '';
+  let pending = 0, cutting = 0, dispatch = 0;
+  let totalPrice = 0;
+  let matchedCount = 0;
+
+  sortedPanels.forEach(p => {
+    const pid = String(p.id).trim();
+
+    if (search && !pid.toLowerCase().includes(search)) return;
+    if (filter !== 'all' && p.status !== filter) return;
+
+    if (p.status === 'pending') pending++;
+    if (p.status === 'cutting') cutting++;
+    if (p.status === 'dispatched') dispatch++;
+    totalPrice += (p.price || 0);
+    if (p.matched) matchedCount++;
+
+    const item = p.items[0];
+    const display = item.seq ? `${item.seq}/${p.totalGroupQty || 1}` : '1';
+    const stickerAssigned = p.stickerFileName ? '✅ Assigned' : '❌ No Sticker';
+
+    // Extract number for display
+    const panelNum = parseInt(String(p.id).replace(/[^0-9]/g, '')) || '';
+
+    html += `
+    <div class="panel ${p.status}">
+      <div class="panel-header">
+        <span class="panel-id">${pid} <span class="panel-number">#${panelNum}</span></span>
+        <span class="panel-status ${p.status}">${p.status.toUpperCase()}</span>
+      </div>
+      <div class="panel-details">
+        <div><strong>Size:</strong> ${item.length}×${item.width}mm</div>
+        <div><strong>Qty:</strong> ${display}</div>
+        <div><strong>Sticker:</strong> ${stickerAssigned}</div>
+        <div><strong>Page:</strong> ${p.stickerPage || 'N/A'}</div>
+        ${p.matched ? `<div><strong>OCR:</strong> ✅ #${p.ocrPanel || ''}</div>` : ''}
+      </div>
+      <div class="panel-actions">
+        ${p.status === 'pending' ? `
+          <button class="cut" onclick="updateStatus('${pid}','cutting')">✂️ Cutting</button>
+        ` : ''}
+        ${p.status !== 'dispatched' ? `
+          <button class="dis" onclick="updateStatus('${pid}','dispatched')">🚚 Dispatch</button>
+        ` : ''}
+        ${p.stickerFileName ? `
+          <button class="print-btn" onclick="printSingleSticker('${pid}')">🖨️ Sticker</button>
+          <button class="send-btn" onclick="sendSticker('${pid}')">📤 Send</button>
+        ` : ''}
+      </div>
+    </div>
+    `;
+  });
+
+  document.getElementById('list').innerHTML = html || '<div style="text-align:center;padding:20px;color:#94a3b8;">No panels match filters</div>';
+
+  document.getElementById('pending').innerText = pending;
+  document.getElementById('cutting').innerText = cutting;
+  document.getElementById('dispatch').innerText = dispatch;
+
+  const total = pending + cutting + dispatch;
+  const done = cutting + dispatch;
+  const percent = Math.round((done/total)*100 || 0);
+
+  const bar = document.getElementById('bar');
+  bar.style.width = percent + '%';
+
+  if (percent < 40) bar.style.background = '#f59e0b';
+  else if (percent < 80) bar.style.background = '#3b82f6';
+  else bar.style.background = '#10b981';
+
+  document.getElementById('progressText').innerText = percent + '% Done';
+
+  // Update project info
+  document.getElementById('pName').innerText = project.name;
+  document.getElementById('pCount').innerText = total;
+  
+  const stickerCount = project.panels.filter(p => p.stickerFileName).length;
+  document.getElementById('pStickers').innerText = stickerCount;
+  
+  // Calculate matched count
+  const matchedTotal = project.panels.filter(p => p.matched).length;
+  document.getElementById('pMatched').innerText = matchedTotal;
+
+  let status = 'Pending';
+  if (done === total && total > 0) status = '✅ Completed';
+  else if (done > 0) status = '⏳ In Progress';
+  document.getElementById('pStatus').innerText = status;
+
+  setTimeout(() => {
+    const msg = document.getElementById('statusMsg');
+    msg.className = 'success-msg';
+  }, 3000);
+}
+
+// ==========================================
+// UPDATE STATUS
+// ==========================================
+async function updateStatus(panelId, status) {
+  const id = document.getElementById('projectSelect').value;
+  if (!id) {
+    alert('Select a project first');
+    return;
+  }
+
+  try {
+    const res = await fetch(API + '/api/projects/' + id + '/status', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ panelId, status })
+    });
+
+    if (!res.ok) throw new Error('Status update failed');
+
+    const msg = document.getElementById('statusMsg');
+    msg.innerText = `✅ Panel ${panelId} updated to ${status}`;
+    msg.className = 'success-msg show';
+
+    clickSound.play();
+    if (navigator.vibrate) navigator.vibrate(50);
+
+    loadProjects();
+  } catch (err) {
+    alert('Error updating status: ' + err.message);
+  }
+}
+
+// ==========================================
+// SEND STICKER - FIXED VERSION
+// ==========================================
+function sendSticker(panelId) {
+  const projectId = document.getElementById('projectSelect').value;
+  if (!projectId) {
+    alert('Please select a project first');
+    return;
+  }
+
+  // Find the panel in the current project
+  const project = projects.find(p => p._id === projectId);
+  if (!project) {
+    alert('Project not found');
+    return;
+  }
+
+  const panel = project.panels.find(p => normalizeId(p.id) === normalizeId(panelId));
+  if (!panel) {
+    alert('Panel not found in this project');
+    return;
+  }
+
+  if (!panel.stickerFileName) {
+    alert('No sticker assigned to this panel');
+    return;
+  }
+
+  // Confirm before sending
+  const confirmMsg = `📤 Send sticker for Panel ${panelId} to production?\nSticker Page: ${panel.stickerPage || 'N/A'}`;
+  if (!confirm(confirmMsg)) {
+    return;
+  }
+
+  // First, update status to "cutting" if it's pending
+  if (panel.status === 'pending') {
+    updateStatus(panelId, 'cutting');
+  }
+
+  // Open the sticker for printing (so the staff can see and print it)
+  printSingleSticker(panelId);
+
+  // Show success message
+  const msg = document.getElementById('statusMsg');
+  msg.innerText = `✅ Sticker for Panel ${panelId} sent to production!`;
+  msg.className = 'success-msg show';
+  msg.style.background = '#065f46';
+  msg.style.color = '#a7f3d0';
+
+  // Play success sound
+  clickSound.play();
+  if (navigator.vibrate) navigator.vibrate(100);
+
+  // Refresh after a moment
+  setTimeout(() => {
+    loadProjects();
+    setTimeout(() => {
+      msg.className = 'success-msg';
+      msg.style.background = '';
+      msg.style.color = '';
+    }, 5000);
+  }, 1500);
+}
+
+// ==========================================
+// PRINT SINGLE STICKER
+// ==========================================
+function printSingleSticker(panelId) {
+  const projectId = document.getElementById('projectSelect').value;
+  if (!projectId) {
+    alert('Please select a project first');
+    return;
+  }
+
+  // Find the panel in the current project to verify it exists
+  const project = projects.find(p => p._id === projectId);
+  if (!project) {
+    alert('Project not found');
+    return;
+  }
+
+  const panel = project.panels.find(p => normalizeId(p.id) === normalizeId(panelId));
+  if (!panel) {
+    alert('Panel not found in this project');
+    return;
+  }
+
+  if (!panel.stickerFileName) {
+    alert('No sticker assigned to this panel');
+    return;
+  }
+
+  const cleanId = panelId.replace('#', '').trim();
+  const url = API + '/api/projects/' + projectId + '/sticker/' + encodeURIComponent(cleanId);
+  
+  console.log('🖨️ Opening sticker for panel:', panelId);
+  console.log('   📄 Sticker Page:', panel.stickerPage);
+  console.log('   📁 File:', panel.stickerFileName);
+  console.log('   🔗 URL:', url);
+  
+  const win = window.open(url, '_blank');
+  if (!win) {
+    const link = document.createElement('a');
+    link.href = url;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+}
+
+// ==========================================
+// AUTO REFRESH
+// ==========================================
+setInterval(loadProjects, 30000);
+
+// ==========================================
+// LOAD ON START
+// ==========================================
+window.onload = function() {
+  console.log('🚀 Staff panel loaded');
+  checkServerStatus();
+  loadProjects();
+};
+
+</script>
+
+</body>
+</html>
