@@ -189,6 +189,106 @@ select option{background:#1e293b;}
 #custom-toast.error { background: #7f1d1d; color: #fca5a5; }
 #custom-toast.info { background: #1e3a5f; color: #93c5fd; }
 
+/* Stored files viewer */
+.stored-files-btn {
+  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+  color: #fff;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 8px;
+  font-weight: bold;
+  cursor: pointer;
+  font-size: 13px;
+  box-shadow: 0 2px 8px rgba(139,92,246,0.3);
+}
+
+.stored-files-modal {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0,0,0,0.8);
+  z-index: 1000;
+  padding: 20px;
+  overflow-y: auto;
+}
+.stored-files-modal.active {
+  display: block;
+}
+.stored-files-modal .modal-content {
+  background: #1e293b;
+  max-width: 600px;
+  margin: 40px auto;
+  padding: 20px;
+  border-radius: 12px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+.stored-files-modal .modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+.stored-files-modal .close-btn {
+  background: #ef4444;
+  color: #fff;
+  border: none;
+  padding: 6px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: bold;
+}
+.stored-file-item {
+  background: #0f172a;
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.stored-file-item .file-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.stored-file-item .file-name {
+  color: #fff;
+  font-weight: bold;
+}
+.stored-file-item .file-meta {
+  color: #94a3b8;
+  font-size: 12px;
+}
+.stored-file-item .file-actions {
+  display: flex;
+  gap: 6px;
+}
+.stored-file-item .file-actions button {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: bold;
+}
+.stored-file-item .open-btn {
+  background: #3b82f6;
+  color: #fff;
+}
+.stored-file-item .delete-btn {
+  background: #ef4444;
+  color: #fff;
+}
+.no-files {
+  text-align: center;
+  color: #94a3b8;
+  padding: 30px;
+}
+
 @media (max-width:600px){
   .panel-details{grid-template-columns:1fr 1fr;}
   .filters{grid-template-columns:1fr;}
@@ -197,6 +297,10 @@ select option{background:#1e293b;}
   .header-actions button{flex:1;}
   .panel-id{font-size:17px;}
   .project-info-grid{grid-template-columns:1fr 1fr;gap:6px;}
+  .stored-files-modal .modal-content {
+    margin: 20px 10px;
+    padding: 16px;
+  }
 }
 </style>
 </head>
@@ -207,7 +311,7 @@ select option{background:#1e293b;}
     👷 Levi Interiors - Staff Panel
   </div>
   <div class="header-actions">
-    <!-- All buttons removed -->
+    <button class="stored-files-btn" onclick="showStoredFiles()">📁 Saved Stickers</button>
   </div>
 </div>
 
@@ -288,6 +392,19 @@ select option{background:#1e293b;}
 
 </div>
 
+<!-- Stored Files Modal -->
+<div id="storedFilesModal" class="stored-files-modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>📁 Saved Stickers</h2>
+      <button class="close-btn" onclick="hideStoredFiles()">✕ Close</button>
+    </div>
+    <div id="storedFilesList">
+      <div class="no-files">No stickers saved yet</div>
+    </div>
+  </div>
+</div>
+
 <script>
 
 // ==========================================
@@ -324,6 +441,109 @@ const clickSound = new Audio("https://www.soundjay.com/buttons/sounds/button-3.m
 
 let projects = [];
 let loading = false;
+
+// ==========================================
+// LOCAL STORAGE FUNCTIONS FOR STICKERS
+// ==========================================
+function saveStickerToLocalStorage(panelId, projectName, stickerUrl, stickerPage) {
+  const stored = JSON.parse(localStorage.getItem('levi_stickers') || '[]');
+  
+  // Check if already exists
+  if (stored.find(s => s.panelId === panelId && s.projectName === projectName)) {
+    return false; // Already saved
+  }
+  
+  const stickerData = {
+    panelId: panelId,
+    projectName: projectName,
+    stickerUrl: stickerUrl,
+    stickerPage: stickerPage,
+    savedAt: new Date().toISOString()
+  };
+  
+  stored.push(stickerData);
+  localStorage.setItem('levi_stickers', JSON.stringify(stored));
+  return true;
+}
+
+function getStoredStickers() {
+  return JSON.parse(localStorage.getItem('levi_stickers') || '[]');
+}
+
+function deleteStoredSticker(panelId, projectName) {
+  let stored = JSON.parse(localStorage.getItem('levi_stickers') || '[]');
+  stored = stored.filter(s => !(s.panelId === panelId && s.projectName === projectName));
+  localStorage.setItem('levi_stickers', JSON.stringify(stored));
+  return stored;
+}
+
+function clearAllStoredStickers() {
+  localStorage.removeItem('levi_stickers');
+}
+
+// ==========================================
+// SHOW STORED FILES MODAL
+// ==========================================
+function showStoredFiles() {
+  const modal = document.getElementById('storedFilesModal');
+  modal.classList.add('active');
+  renderStoredFiles();
+}
+
+function hideStoredFiles() {
+  document.getElementById('storedFilesModal').classList.remove('active');
+}
+
+function renderStoredFiles() {
+  const stored = getStoredStickers();
+  const container = document.getElementById('storedFilesList');
+  
+  if (stored.length === 0) {
+    container.innerHTML = '<div class="no-files">📭 No stickers saved yet</div>';
+    return;
+  }
+  
+  container.innerHTML = stored.map((s, index) => `
+    <div class="stored-file-item">
+      <div class="file-info">
+        <span class="file-name">📄 Panel ${s.panelId}</span>
+        <span class="file-meta">📁 ${s.projectName} • Page ${s.stickerPage || 'N/A'} • ${new Date(s.savedAt).toLocaleString()}</span>
+      </div>
+      <div class="file-actions">
+        <button class="open-btn" onclick="openStoredSticker('${s.panelId}', '${s.projectName}')">👁️ Open</button>
+        <button class="delete-btn" onclick="deleteStoredStickerUI('${s.panelId}', '${s.projectName}')">🗑️</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ==========================================
+// OPEN STORED STICKER FROM LOCAL STORAGE
+// ==========================================
+function openStoredSticker(panelId, projectName) {
+  const stored = getStoredStickers();
+  const sticker = stored.find(s => s.panelId === panelId && s.projectName === projectName);
+  
+  if (!sticker) {
+    showToast('❌ Sticker not found in storage', 'error');
+    return;
+  }
+  
+  // Open the sticker URL in a new window
+  window.open(sticker.stickerUrl, '_blank');
+  showToast(`📄 Opening sticker for Panel ${panelId}`, 'info');
+}
+
+// ==========================================
+// DELETE STORED STICKER
+// ==========================================
+function deleteStoredStickerUI(panelId, projectName) {
+  if (confirm(`Delete saved sticker for Panel ${panelId}?`)) {
+    deleteStoredSticker(panelId, projectName);
+    renderStoredFiles();
+    showToast(`🗑️ Sticker for Panel ${panelId} deleted`, 'info');
+  }
+}
 
 // ==========================================
 // CHECK SERVER STATUS
@@ -517,7 +737,7 @@ function loadProject() {
         ` : ''}
         ${p.stickerFileName ? `
           <button class="print-btn" onclick="printSingleSticker('${pid}')">🖨️ Sticker</button>
-          <button class="send-btn" onclick="sendSticker('${pid}')">📤 Send</button>
+          <button class="send-btn" onclick="saveStickerLocal('${pid}')">📥 Save</button>
         ` : ''}
       </div>
     </div>
@@ -622,9 +842,9 @@ function showToast(msg, type = "success") {
 }
 
 // ==========================================
-// SEND STICKER - WITH SHARE FUNCTIONALITY
+// SAVE STICKER TO LOCAL STORAGE (NEW)
 // ==========================================
-async function sendSticker(panelId) {
+async function saveStickerLocal(panelId) {
   const projectId = document.getElementById('projectSelect').value;
   if (!projectId) {
     alert('Please select a project first');
@@ -652,98 +872,32 @@ async function sendSticker(panelId) {
   const cleanId = panelId.replace('#', '').trim();
   const stickerUrl = API + '/api/projects/' + projectId + '/sticker/' + encodeURIComponent(cleanId);
   
-  // Prepare the data to share
-  const shareData = {
-    title: `Sticker for Panel ${panelId}`,
-    text: `📋 Panel: ${panelId}\n📄 Page: ${panel.stickerPage || 'N/A'}\n📁 Project: ${project.name}\n🔗 ${stickerUrl}`,
-    url: stickerUrl
-  };
-
-  try {
-    // Try using Web Share API first (mobile/desktop)
-    if (navigator.share) {
-      await navigator.share(shareData);
-      
-      // Show success message
-      showToast(`✅ Sticker for Panel ${panelId} shared successfully!`, 'success');
-      
-      // Update status if pending
-      if (panel.status === 'pending') {
-        await updateStatus(panelId, 'cutting');
-      }
-      
-      // Play sound
-      clickSound.play();
-      if (navigator.vibrate) navigator.vibrate(100);
-      
-      // Refresh after a moment
-      setTimeout(() => loadProjects(), 1500);
-    } 
-    // Fallback: Copy link to clipboard
-    else if (navigator.clipboard) {
-      await navigator.clipboard.writeText(`Panel: ${panelId}\nSticker Page: ${panel.stickerPage || 'N/A'}\nProject: ${project.name}\nLink: ${stickerUrl}`);
-      
-      showToast(`📋 Sticker link for Panel ${panelId} copied to clipboard!`, 'success');
-      
-      // Update status if pending
-      if (panel.status === 'pending') {
-        await updateStatus(panelId, 'cutting');
-      }
-      
-      clickSound.play();
-      if (navigator.vibrate) navigator.vibrate(100);
-      setTimeout(() => loadProjects(), 1500);
-    } 
-    // Final fallback: Open in new window
-    else {
-      const confirmMsg = `📤 Open sticker for Panel ${panelId}?\nSticker Page: ${panel.stickerPage || 'N/A'}\n\n(This will open the sticker in a new window)`;
-      if (confirm(confirmMsg)) {
-        window.open(stickerUrl, '_blank');
-        
-        // Update status if pending
-        if (panel.status === 'pending') {
-          await updateStatus(panelId, 'cutting');
-        }
-        
-        showToast(`📤 Sticker for Panel ${panelId} opened`, 'success');
-        setTimeout(() => loadProjects(), 1500);
-      }
-    }
-  } catch (err) {
-    // User cancelled share dialog
-    if (err.name === 'AbortError' || err.message?.includes('cancel')) {
-      console.log('Share cancelled by user');
-      return;
-    }
-    
-    console.error('❌ Share error:', err);
-    
-    // Fallback to clipboard if share fails
-    try {
-      if (navigator.clipboard) {
-        await navigator.clipboard.writeText(`Panel: ${panelId}\nSticker Page: ${panel.stickerPage || 'N/A'}\nProject: ${project.name}\nLink: ${stickerUrl}`);
-        showToast(`📋 Sticker link copied to clipboard!`, 'success');
-        
-        if (panel.status === 'pending') {
-          await updateStatus(panelId, 'cutting');
-        }
-        
-        clickSound.play();
-        if (navigator.vibrate) navigator.vibrate(100);
-        setTimeout(() => loadProjects(), 1500);
-      } else {
-        // Final fallback: open in new window        window.open(stickerUrl, '_blank');
-        if (panel.status === 'pending') {
-          await updateStatus(panelId, 'cutting');
-        }
-        showToast(`📤 Sticker opened for Panel ${panelId}`, 'success');
-        setTimeout(() => loadProjects(), 1500);
-      }
-    } catch (clipboardErr) {
-      showToast(`❌ Could not share: ${err.message}`, 'error');
-      console.error('Clipboard error:', clipboardErr);
-    }
+  // Save to local storage
+  const saved = saveStickerToLocalStorage(panelId, project.name, stickerUrl, panel.stickerPage);
+  
+  if (!saved) {
+    showToast(`⚠️ Sticker for Panel ${panelId} already saved locally`, 'info');
+    return;
   }
+  
+  showToast(`✅ Sticker for Panel ${panelId} saved to local storage!`, 'success');
+  
+  // Update status if pending
+  if (panel.status === 'pending') {
+    await updateStatus(panelId, 'cutting');
+  }
+  
+  clickSound.play();
+  if (navigator.vibrate) navigator.vibrate(100);
+  
+  // Offer to open the sticker
+  setTimeout(() => {
+    if (confirm(`📄 Sticker saved locally for Panel ${panelId}. Open it now?`)) {
+      window.open(stickerUrl, '_blank');
+    }
+  }, 500);
+  
+  setTimeout(() => loadProjects(), 1500);
 }
 
 // ==========================================
